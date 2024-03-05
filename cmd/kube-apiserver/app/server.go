@@ -122,7 +122,7 @@ cluster's shared state through which all other components interact.`,
 				return utilerrors.NewAggregate(errs)
 			}
 
-			// genericapiserver.SetupSignalHandler() 返回 stopCh <-struct{}，用来阻塞 api-server 程序
+			// genericapiserver.SetupSignalHandler() 返回 <-chan struct{} ，用来阻塞 api-server 程序
 			// 和 kubectl 不同，kubectl 是一个命令行工具，执行完后就会退出
 			// 而 kube-apiserver 是一个常驻的服务器进程，这里通过 stopCh 的方法阻塞，直到接受到信号后，才退出
 			// 相比于传统的 for 死循环要更优雅
