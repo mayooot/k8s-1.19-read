@@ -108,9 +108,11 @@ func NewFilteredSharedInformerFactory(client kubernetes.Interface, defaultResync
 // NewSharedInformerFactoryWithOptions constructs a new instance of a SharedInformerFactory with additional options.
 func NewSharedInformerFactoryWithOptions(client kubernetes.Interface, defaultResync time.Duration, options ...SharedInformerOption) SharedInformerFactory {
 	factory := &sharedInformerFactory{
-		client:           client,
-		namespace:        v1.NamespaceAll,
-		defaultResync:    defaultResync,
+		// client 是连接 kube-apiserver 的
+		client:        client,
+		namespace:     v1.NamespaceAll,
+		defaultResync: defaultResync,
+		// 一个 sharedInformer 对应多个 Informer
 		informers:        make(map[reflect.Type]cache.SharedIndexInformer),
 		startedInformers: make(map[reflect.Type]bool),
 		customResync:     make(map[reflect.Type]time.Duration),
@@ -125,13 +127,17 @@ func NewSharedInformerFactoryWithOptions(client kubernetes.Interface, defaultRes
 }
 
 // Start initializes all requested informers.
+// sharedInformer 的启动
 func (f *sharedInformerFactory) Start(stopCh <-chan struct{}) {
+	// 普通的互斥锁
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
 	for informerType, informer := range f.informers {
 		if !f.startedInformers[informerType] {
+			// 异步处理
 			go informer.Run(stopCh)
+			// 使用一个 map 存储状态，已启动的 Informer 不会再次启动
 			f.startedInformers[informerType] = true
 		}
 	}
@@ -161,11 +167,13 @@ func (f *sharedInformerFactory) WaitForCacheSync(stopCh <-chan struct{}) map[ref
 
 // InternalInformerFor returns the SharedIndexInformer for obj using an internal
 // client.
+// 查询对应的 Informer
 func (f *sharedInformerFactory) InformerFor(obj runtime.Object, newFunc internalinterfaces.NewInformerFunc) cache.SharedIndexInformer {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
 	informerType := reflect.TypeOf(obj)
+	// 找到就直接返回
 	informer, exists := f.informers[informerType]
 	if exists {
 		return informer
@@ -176,6 +184,7 @@ func (f *sharedInformerFactory) InformerFor(obj runtime.Object, newFunc internal
 		resyncPeriod = f.defaultResync
 	}
 
+	// 没找到 Infomer，就使用传递的 newFunc函数创建一个 Informer
 	informer = newFunc(f.client, resyncPeriod)
 	f.informers[informerType] = informer
 
@@ -184,6 +193,7 @@ func (f *sharedInformerFactory) InformerFor(obj runtime.Object, newFunc internal
 
 // SharedInformerFactory provides shared informers for resources in all known
 // API group versions.
+// SharedInformerFactory 是 sharedInformerFactory 的接口定义
 type SharedInformerFactory interface {
 	internalinterfaces.SharedInformerFactory
 	ForResource(resource schema.GroupVersionResource) (GenericInformer, error)
@@ -195,6 +205,8 @@ type SharedInformerFactory interface {
 	Batch() batch.Interface
 	Certificates() certificates.Interface
 	Coordination() coordination.Interface
+	// 核心资源，那些定义在 /api 下面的 legacy 资源
+	// 目前关注 Pod 的 Informer
 	Core() core.Interface
 	Discovery() discovery.Interface
 	Events() events.Interface

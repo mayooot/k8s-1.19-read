@@ -37,6 +37,7 @@ type PodsGetter interface {
 }
 
 // PodInterface has methods to work with Pod resources.
+// Pod 基本的增删改查操作
 type PodInterface interface {
 	Create(ctx context.Context, pod *v1.Pod, opts metav1.CreateOptions) (*v1.Pod, error)
 	Update(ctx context.Context, pod *v1.Pod, opts metav1.UpdateOptions) (*v1.Pod, error)
@@ -54,6 +55,7 @@ type PodInterface interface {
 }
 
 // pods implements PodInterface
+// 具体实现
 type pods struct {
 	client rest.Interface
 	ns     string
@@ -81,6 +83,7 @@ func (c *pods) Get(ctx context.Context, name string, options metav1.GetOptions) 
 }
 
 // List takes label and field selectors, and returns the list of Pods that match those selectors.
+// List 和 Watch 依赖客户端，也就是从 kube-apiserver 中查询
 func (c *pods) List(ctx context.Context, opts metav1.ListOptions) (result *v1.PodList, err error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {

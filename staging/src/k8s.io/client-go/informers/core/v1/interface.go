@@ -43,6 +43,7 @@ type Interface interface {
 	// PersistentVolumeClaims returns a PersistentVolumeClaimInformer.
 	PersistentVolumeClaims() PersistentVolumeClaimInformer
 	// Pods returns a PodInformer.
+	// Pod 的定义
 	Pods() PodInformer
 	// PodTemplates returns a PodTemplateInformer.
 	PodTemplates() PodTemplateInformer

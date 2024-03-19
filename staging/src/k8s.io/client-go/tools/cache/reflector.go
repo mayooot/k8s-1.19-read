@@ -206,6 +206,7 @@ var internalPackages = []string{"client-go/tools/cache/"}
 func (r *Reflector) Run(stopCh <-chan struct{}) {
 	klog.V(2).Infof("Starting reflector %s (%s) from %s", r.expectedTypeName, r.resyncPeriod, r.name)
 	wait.BackoffUntil(func() {
+		// 调用了 ListAndWatch
 		if err := r.ListAndWatch(stopCh); err != nil {
 			r.watchErrorHandler(r, err)
 		}
@@ -239,6 +240,8 @@ func (r *Reflector) resyncChan() (<-chan time.Time, func() bool) {
 // ListAndWatch first lists all items and get the resource version at the moment of call,
 // and then use the resource version to watch.
 // It returns error if ListAndWatch didn't even try to initialize watch.
+// watchHandler：Watch 到对应的事件，调用对应的 Handler
+// 在这个方法的最后
 func (r *Reflector) ListAndWatch(stopCh <-chan struct{}) error {
 	klog.V(3).Infof("Listing and watching %v from %s", r.expectedTypeName, r.name)
 	var resourceVersion string
@@ -412,6 +415,7 @@ func (r *Reflector) ListAndWatch(stopCh <-chan struct{}) error {
 			return err
 		}
 
+		// watch 到对应事件后，调用对应的 Handler
 		if err := r.watchHandler(start, w, &resourceVersion, resyncerrc, stopCh); err != nil {
 			if err != errorStopRequested {
 				switch {
@@ -448,13 +452,18 @@ func (r *Reflector) watchHandler(start time.Time, w watch.Interface, resourceVer
 
 loop:
 	for {
+		// 一个经典的 go 使用 select 监听多 channel
 		select {
+		// stopCh：负责退出
 		case <-stopCh:
 			return errorStopRequested
+		// errc：接受 error 的 channel
 		case err := <-errc:
 			return err
+		// 接受事件 event 的 channel
 		case event, ok := <-w.ResultChan():
 			if !ok {
+				// channel 被关闭，退出 loop
 				break loop
 			}
 			if event.Type == watch.Error {
@@ -478,6 +487,7 @@ loop:
 				continue
 			}
 			newResourceVersion := meta.GetResourceVersion()
+			// 增删改三种 Event，分别对应到 store，即在 DeltaFIFO 中操作 object
 			switch event.Type {
 			case watch.Added:
 				err := r.store.Add(event.Object)

@@ -368,11 +368,13 @@ func (s *sharedIndexInformer) SetWatchErrorHandler(handler WatchErrorHandler) er
 func (s *sharedIndexInformer) Run(stopCh <-chan struct{}) {
 	defer utilruntime.HandleCrash()
 
+	// 创建 先进先出的队列
 	fifo := NewDeltaFIFOWithOptions(DeltaFIFOOptions{
 		KnownObjects:          s.indexer,
 		EmitDeltaTypeReplaced: true,
 	})
 
+	// 将这个队列传递给 cfg
 	cfg := &Config{
 		Queue:            fifo,
 		ListerWatcher:    s.listerWatcher,
@@ -381,10 +383,12 @@ func (s *sharedIndexInformer) Run(stopCh <-chan struct{}) {
 		RetryOnError:     false,
 		ShouldResync:     s.processor.shouldResync,
 
+		// PopProcessFunc 的定义
 		Process:           s.HandleDeltas,
 		WatchErrorHandler: s.watchErrorHandler,
 	}
 
+	// 新建 controller
 	func() {
 		s.startedLock.Lock()
 		defer s.startedLock.Unlock()
@@ -407,6 +411,7 @@ func (s *sharedIndexInformer) Run(stopCh <-chan struct{}) {
 		defer s.startedLock.Unlock()
 		s.stopped = true // Don't want any new listeners
 	}()
+	// 运行 controller
 	s.controller.Run(stopCh)
 }
 
@@ -531,9 +536,12 @@ func (s *sharedIndexInformer) HandleDeltas(obj interface{}) error {
 	// from oldest to newest
 	for _, d := range obj.(Deltas) {
 		switch d.Type {
+		// 同步、替换、新增、更新
 		case Sync, Replaced, Added, Updated:
 			s.cacheMutationDetector.AddObject(d.Object)
+			// 先去 indexer 查询
 			if old, exists, err := s.indexer.Get(d.Object); err == nil && exists {
+				// 如果数据已经存在，执行 Update
 				if err := s.indexer.Update(d.Object); err != nil {
 					return err
 				}
@@ -552,17 +560,23 @@ func (s *sharedIndexInformer) HandleDeltas(obj interface{}) error {
 						}
 					}
 				}
+				// 分发 Update 事件
 				s.processor.distribute(updateNotification{oldObj: old, newObj: d.Object}, isSync)
 			} else {
+				// 没有数据不存在，就执行 Add
 				if err := s.indexer.Add(d.Object); err != nil {
 					return err
 				}
+				// 分发 Add 事件
 				s.processor.distribute(addNotification{newObj: d.Object}, false)
 			}
+		// 删除
 		case Deleted:
+			// 去 indexer 删除
 			if err := s.indexer.Delete(d.Object); err != nil {
 				return err
 			}
+			// 分发 delete 事件
 			s.processor.distribute(deleteNotification{oldObj: d.Object}, false)
 		}
 	}
@@ -577,8 +591,11 @@ func (s *sharedIndexInformer) HandleDeltas(obj interface{}) error {
 // The non-sync distributions go to every listener.
 type sharedProcessor struct {
 	listenersStarted bool
-	listenersLock    sync.RWMutex
-	listeners        []*processorListener
+	// 读写锁
+	listenersLock sync.RWMutex
+	// 普通监听列表
+	listeners []*processorListener
+	// 同步监听列表
 	syncingListeners []*processorListener
 	clock            clock.Clock
 	wg               wait.Group
@@ -604,6 +621,7 @@ func (p *sharedProcessor) distribute(obj interface{}, sync bool) {
 	p.listenersLock.RLock()
 	defer p.listenersLock.RUnlock()
 
+	// 将 object 分发到 同步监听 或者 普通监听 的列表
 	if sync {
 		for _, listener := range p.syncingListeners {
 			listener.add(obj)
@@ -728,6 +746,7 @@ func newProcessListener(handler ResourceEventHandler, requestedResyncPeriod, res
 	return ret
 }
 
+// 添加到 channel
 func (p *processorListener) add(notification interface{}) {
 	p.addCh <- notification
 }
