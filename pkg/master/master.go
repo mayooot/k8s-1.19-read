@@ -333,12 +333,14 @@ func (c *Config) Complete() CompletedConfig {
 // New returns a new instance of Master from the given config.
 // Certain config fields will be set to a default value if unset.
 // Certain config fields must be specified, including:
-//   KubeletClientConfig
+//
+//	KubeletClientConfig
 func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget) (*Master, error) {
 	if reflect.DeepEqual(c.ExtraConfig.KubeletClientConfig, kubeletclient.KubeletClientConfig{}) {
 		return nil, fmt.Errorf("Master.New() called with empty config.KubeletClientConfig")
 	}
 
+	// genericServer 的初始化
 	s, err := c.GenericConfig.New("kube-apiserver", delegationTarget)
 	if err != nil {
 		return nil, err
@@ -381,12 +383,14 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 		}
 	}
 
+	// 核心的 KubeAPIServer 的实例化
 	m := &Master{
 		GenericAPIServer:          s,
 		ClusterAuthenticationInfo: c.ExtraConfig.ClusterAuthenticationInfo,
 	}
 
 	// install legacy rest storage
+	// 核心资源
 	if c.ExtraConfig.APIResourceConfigSource.VersionEnabled(apiv1.SchemeGroupVersion) {
 		legacyRESTStorageProvider := corerest.LegacyRESTStorageProvider{
 			StorageFactory:              c.ExtraConfig.StorageFactory,
@@ -402,6 +406,7 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 			ServiceAccountMaxExpiration: c.ExtraConfig.ServiceAccountMaxExpiration,
 			APIAudiences:                c.GenericConfig.Authentication.APIAudiences,
 		}
+		// 核心资源都会放在 legacy 中，下面是它的注册过程
 		if err := m.InstallLegacyAPI(&c, c.GenericConfig.RESTOptionsGetter, legacyRESTStorageProvider); err != nil {
 			return nil, err
 		}
@@ -414,6 +419,7 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 	// with specific priorities.
 	// TODO: describe the priority all the way down in the RESTStorageProviders and plumb it back through the various discovery
 	// handlers that we have.
+	// REST 接口的存储定义。比如 node 节点、event 事件等
 	restStorageProviders := []RESTStorageProvider{
 		authenticationrest.RESTStorageProvider{Authenticator: c.GenericConfig.Authentication.Authenticator, APIAudiences: c.GenericConfig.Authentication.APIAudiences},
 		authorizationrest.RESTStorageProvider{Authorizer: c.GenericConfig.Authorization.Authorizer, RuleResolver: c.GenericConfig.RuleResolver},
@@ -437,6 +443,7 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 		admissionregistrationrest.RESTStorageProvider{},
 		eventsrest.RESTStorageProvider{TTL: c.ExtraConfig.EventTTL},
 	}
+	// 注册 API
 	if err := m.InstallAPIs(c.ExtraConfig.APIResourceConfigSource, c.GenericConfig.RESTOptionsGetter, restStorageProviders...); err != nil {
 		return nil, err
 	}
@@ -445,6 +452,7 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 		m.installTunneler(c.ExtraConfig.Tunneler, corev1client.NewForConfigOrDie(c.GenericConfig.LoopbackClientConfig).Nodes())
 	}
 
+	// 添加 Hook
 	m.GenericAPIServer.AddPostStartHookOrDie("start-cluster-authentication-info-controller", func(hookContext genericapiserver.PostStartHookContext) error {
 		kubeClient, err := kubernetes.NewForConfig(hookContext.LoopbackClientConfig)
 		if err != nil {
@@ -487,6 +495,7 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 
 // InstallLegacyAPI will install the legacy APIs for the restStorageProviders if they are enabled.
 func (m *Master) InstallLegacyAPI(c *completedConfig, restOptionsGetter generic.RESTOptionsGetter, legacyRESTStorageProvider corerest.LegacyRESTStorageProvider) error {
+	// 创建核心资源的REST 存储
 	legacyRESTStorage, apiGroupInfo, err := legacyRESTStorageProvider.NewLegacyRESTStorage(restOptionsGetter)
 	if err != nil {
 		return fmt.Errorf("error building core storage: %v", err)
@@ -498,6 +507,9 @@ func (m *Master) InstallLegacyAPI(c *completedConfig, restOptionsGetter generic.
 	m.GenericAPIServer.AddPostStartHookOrDie(controllerName, bootstrapController.PostStartHook)
 	m.GenericAPIServer.AddPreShutdownHookOrDie(controllerName, bootstrapController.PreShutdownHook)
 
+	// K8s 里的核心 API 对象，比如 Pod、Node等，是不需要 Group 的（即：它们的 Group 为 ""）
+	// const DefaultLegacyAPIPrefix = "/api"
+	// 同时 注册上  Version 和 Resource
 	if err := m.GenericAPIServer.InstallLegacyAPIGroup(genericapiserver.DefaultLegacyAPIPrefix, &apiGroupInfo); err != nil {
 		return fmt.Errorf("error in registering group versions: %v", err)
 	}

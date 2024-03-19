@@ -240,6 +240,7 @@ func CreateServerChain(completedOptions completedServerRunOptions, stopCh <-chan
 
 // CreateKubeAPIServer creates and wires a workable kube-apiserver
 func CreateKubeAPIServer(kubeAPIServerConfig *master.Config, delegateAPIServer genericapiserver.DelegationTarget) (*master.Master, error) {
+	// Complete() 是对配置的完善，New() 是真正创建 apiServer 的函数
 	kubeAPIServer, err := kubeAPIServerConfig.Complete().New(delegateAPIServer)
 	if err != nil {
 		return nil, err

@@ -659,7 +659,7 @@ func (c completedConfig) New(name string, delegationTarget DelegationTarget) (*G
 
 	s.listedPathProvider = routes.ListedPathProviders{s.listedPathProvider, delegationTarget}
 
-	// 安装 API 相关参数，这个是重点
+	// 设置一些通用的 API，例如 /metrics、/index.html
 	installAPI(s, c.Config)
 
 	// use the UnprotectedHandler from the delegation target to ensure that we don't attempt to double authenticator, authorize,
@@ -701,9 +701,11 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *Config) http.Handler {
 }
 
 func installAPI(s *GenericAPIServer, c *Config) {
+	// 添加 /index 路由规则
 	if c.EnableIndex {
 		routes.Index{}.Install(s.listedPathProvider, s.Handler.NonGoRestfulMux)
 	}
+	// 添加 /pprof 路由规则，用于性能分析
 	if c.EnableProfiling {
 		routes.Profiling{}.Install(s.Handler.NonGoRestfulMux)
 		if c.EnableContentionProfiling {
@@ -712,6 +714,7 @@ func installAPI(s *GenericAPIServer, c *Config) {
 		// so far, only logging related endpoints are considered valid to add for these debug flags.
 		routes.DebugFlags{}.Install(s.Handler.NonGoRestfulMux, "v", routes.StringFlagPutHandler(logs.GlogSetter))
 	}
+	// 添加 /metrics 路由规则。使用的是 Prometheus 采集格式
 	if c.EnableMetrics {
 		if c.EnableProfiling {
 			routes.MetricsWithReset{}.Install(s.Handler.NonGoRestfulMux)
@@ -720,8 +723,10 @@ func installAPI(s *GenericAPIServer, c *Config) {
 		}
 	}
 
+	// 添加版本 /version 路由规则
 	routes.Version{Version: c.Version}.Install(s.Handler.GoRestfulContainer)
 
+	// 开启服务发现
 	if c.EnableDiscovery {
 		s.Handler.GoRestfulContainer.Add(s.DiscoveryGroupManager.WebService())
 	}

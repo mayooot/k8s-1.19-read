@@ -68,14 +68,20 @@ type REST struct {
 }
 
 // NewStorage returns a RESTStorage object that will work against pods.
+// 返回值是一个 PodStorage，pod 在 etcd 中的实际存储
 func NewStorage(optsGetter generic.RESTOptionsGetter, k client.ConnectionInfoGetter, proxyTransport http.RoundTripper, podDisruptionBudgetClient policyclient.PodDisruptionBudgetsGetter) (PodStorage, error) {
 
+	// 发现 store 中并没有填充最重要的 Storage DryRunnableStorage
+	// 往下找找这个参数的具体实现（CompleteWithOptions）
 	store := &genericregistry.Store{
 		NewFunc:                  func() runtime.Object { return &api.Pod{} },
 		NewListFunc:              func() runtime.Object { return &api.PodList{} },
 		PredicateFunc:            registrypod.MatchPod,
 		DefaultQualifiedResource: api.Resource("pods"),
 
+		// 增删改的策略
+		// 可以点进去 CreateStrategy，看一下这个结构体的定义
+		// 其中有一个 Storage DryRunnableStorage 存储字段
 		CreateStrategy:      registrypod.Strategy,
 		UpdateStrategy:      registrypod.Strategy,
 		DeleteStrategy:      registrypod.Strategy,
@@ -89,6 +95,7 @@ func NewStorage(optsGetter generic.RESTOptionsGetter, k client.ConnectionInfoGet
 		TriggerFunc: map[string]storage.IndexerFunc{"spec.nodeName": registrypod.NodeNameTriggerFunc},
 		Indexers:    registrypod.Indexers(),
 	}
+
 	if err := store.CompleteWithOptions(options); err != nil {
 		return PodStorage{}, err
 	}

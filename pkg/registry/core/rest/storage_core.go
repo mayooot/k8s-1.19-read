@@ -120,56 +120,69 @@ func (c LegacyRESTStorageProvider) NewLegacyRESTStorage(restOptionsGetter generi
 	}
 	restStorage := LegacyRESTStorage{}
 
+	// Pod 模板
 	podTemplateStorage, err := podtemplatestore.NewREST(restOptionsGetter)
 	if err != nil {
 		return LegacyRESTStorage{}, genericapiserver.APIGroupInfo{}, err
 	}
 
+	// event 事件
 	eventStorage, err := eventstore.NewREST(restOptionsGetter, uint64(c.EventTTL.Seconds()))
 	if err != nil {
 		return LegacyRESTStorage{}, genericapiserver.APIGroupInfo{}, err
 	}
+	// limitRange 资源限制
 	limitRangeStorage, err := limitrangestore.NewREST(restOptionsGetter)
 	if err != nil {
 		return LegacyRESTStorage{}, genericapiserver.APIGroupInfo{}, err
 	}
 
+	// resourceQuota 资源配额
 	resourceQuotaStorage, resourceQuotaStatusStorage, err := resourcequotastore.NewREST(restOptionsGetter)
 	if err != nil {
 		return LegacyRESTStorage{}, genericapiserver.APIGroupInfo{}, err
 	}
+	// secret 加密
 	secretStorage, err := secretstore.NewREST(restOptionsGetter)
 	if err != nil {
 		return LegacyRESTStorage{}, genericapiserver.APIGroupInfo{}, err
 	}
+	// PV 存储
 	persistentVolumeStorage, persistentVolumeStatusStorage, err := pvstore.NewREST(restOptionsGetter)
 	if err != nil {
 		return LegacyRESTStorage{}, genericapiserver.APIGroupInfo{}, err
 	}
+	// PVC 存储
 	persistentVolumeClaimStorage, persistentVolumeClaimStatusStorage, err := pvcstore.NewREST(restOptionsGetter)
 	if err != nil {
 		return LegacyRESTStorage{}, genericapiserver.APIGroupInfo{}, err
 	}
+	// ConfigMap 配置
 	configMapStorage, err := configmapstore.NewREST(restOptionsGetter)
 	if err != nil {
 		return LegacyRESTStorage{}, genericapiserver.APIGroupInfo{}, err
 	}
 
+	// Namespace 配置
 	namespaceStorage, namespaceStatusStorage, namespaceFinalizeStorage, err := namespacestore.NewREST(restOptionsGetter)
 	if err != nil {
 		return LegacyRESTStorage{}, genericapiserver.APIGroupInfo{}, err
 	}
 
+	// 端点配置
 	endpointsStorage, err := endpointsstore.NewREST(restOptionsGetter)
 	if err != nil {
 		return LegacyRESTStorage{}, genericapiserver.APIGroupInfo{}, err
 	}
 
+	// Node 节点配置
 	nodeStorage, err := nodestore.NewStorage(restOptionsGetter, c.KubeletClientConfig, c.ProxyTransport)
 	if err != nil {
 		return LegacyRESTStorage{}, genericapiserver.APIGroupInfo{}, err
 	}
 
+	// Pod 模板，nginx-pod 属于这个类型的资源
+	// Pod 资源的初始化
 	podStorage, err := podstore.NewStorage(
 		restOptionsGetter,
 		nodeStorage.KubeletConnectionInfo,
@@ -270,6 +283,7 @@ func (c LegacyRESTStorageProvider) NewLegacyRESTStorage(restOptionsGetter generi
 		serviceNodePortAllocator,
 		c.ProxyTransport)
 
+	// 核心资源的子资源
 	restStorageMap := map[string]rest.Storage{
 		"pods":             podStorage.Pod,
 		"pods/attach":      podStorage.Attach,

@@ -25,6 +25,7 @@ import (
 )
 
 type DryRunnableStorage struct {
+	// 定义了 存储的接口
 	Storage storage.Interface
 	Codec   runtime.Codec
 }
@@ -40,6 +41,7 @@ func (s *DryRunnableStorage) Create(ctx context.Context, key string, obj, out ru
 		}
 		return s.copyInto(obj, out)
 	}
+	// 实际创建
 	return s.Storage.Create(ctx, key, obj, out, ttl)
 }
 

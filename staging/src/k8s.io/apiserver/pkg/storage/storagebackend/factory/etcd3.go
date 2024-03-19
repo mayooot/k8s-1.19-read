@@ -233,7 +233,6 @@ func newETCD3Storage(c storagebackend.Config) (storage.Interface, DestroyFunc, e
 	if err != nil {
 		return nil, nil, err
 	}
-
 	var once sync.Once
 	destroyFunc := func() {
 		// we know that storage destroy funcs are called multiple times (due to reuse in subresources).
