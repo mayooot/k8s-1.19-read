@@ -29,6 +29,7 @@ type NodeName struct{}
 
 var _ framework.FilterPlugin = &NodeName{}
 
+// 调度算法的名称和错误信息
 const (
 	// Name is the name of the plugin used in the plugin registry and configurations.
 	Name = "NodeName"
@@ -43,10 +44,12 @@ func (pl *NodeName) Name() string {
 }
 
 // Filter invoked at the filter extension point.
+// 过滤功能，NodeName 算法的实现
 func (pl *NodeName) Filter(ctx context.Context, _ *framework.CycleState, pod *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
 	if nodeInfo.Node() == nil {
 		return framework.NewStatus(framework.Error, "node not found")
 	}
+	// 匹配 pod.Spec.NodeName 和 nodeInfo.Node().Name
 	if !Fits(pod, nodeInfo) {
 		return framework.NewStatus(framework.UnschedulableAndUnresolvable, ErrReason)
 	}
@@ -54,11 +57,15 @@ func (pl *NodeName) Filter(ctx context.Context, _ *framework.CycleState, pod *v1
 }
 
 // Fits actually checks if the pod fits the node.
+// 满足任何一个条件就会成功
+// 1. pod.Spec.NodeName 为空
+// 2. pod 的 NodeName 和节点的匹配
 func Fits(pod *v1.Pod, nodeInfo *framework.NodeInfo) bool {
 	return len(pod.Spec.NodeName) == 0 || pod.Spec.NodeName == nodeInfo.Node().Name
 }
 
 // New initializes a new plugin and returns it.
+// 初始化
 func New(_ runtime.Object, _ framework.FrameworkHandle) (framework.Plugin, error) {
 	return &NodeName{}, nil
 }

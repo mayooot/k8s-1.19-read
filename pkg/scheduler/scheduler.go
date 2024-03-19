@@ -202,6 +202,9 @@ func New(client clientset.Interface,
 
 	schedulerCache := internalcache.New(30*time.Second, stopEverything)
 
+	// 注册了所有的算法，返回值是：
+	// type Registry map[string]PluginFactory
+	// 一个 map
 	registry := frameworkplugins.NewInTreeRegistry()
 	if err := registry.Merge(options.frameworkOutOfTreeRegistry); err != nil {
 		return nil, err
@@ -228,9 +231,11 @@ func New(client clientset.Interface,
 
 	metrics.Register()
 
+	// 重点看一下 Scheduler 的创建过程
 	var sched *Scheduler
 	source := options.schedulerAlgorithmSource
 	switch {
+	// 根据 Provider 创建
 	case source.Provider != nil:
 		// Create the config from a named algorithm provider.
 		sc, err := configurator.createFromProvider(*source.Provider)
@@ -238,14 +243,17 @@ func New(client clientset.Interface,
 			return nil, fmt.Errorf("couldn't create scheduler using provider %q: %v", *source.Provider, err)
 		}
 		sched = sc
+	// 根据用户设置创建，来自文件或者 ConfigMap
 	case source.Policy != nil:
 		// Create the config from a user specified policy source.
 		policy := &schedulerapi.Policy{}
 		switch {
+		// 文件
 		case source.Policy.File != nil:
 			if err := initPolicyFromFile(source.Policy.File.Path, policy); err != nil {
 				return nil, err
 			}
+		// ConfigMap
 		case source.Policy.ConfigMap != nil:
 			if err := initPolicyFromConfigMap(client, source.Policy.ConfigMap, policy); err != nil {
 				return nil, err

@@ -51,10 +51,13 @@ const ClusterAutoscalerProvider = "ClusterAutoscalerProvider"
 type Registry map[string]*schedulerapi.Plugins
 
 // NewRegistry returns an algorithm provider registry instance.
+// 主要分为两类，默认与 ClusterAutoscaler 算法
 func NewRegistry() Registry {
+	// 默认算法包括：过滤、打分、绑定等
 	defaultConfig := getDefaultConfig()
 	applyFeatureGates(defaultConfig)
 
+	// ClusterAutoscaler 集群自动拓展算法
 	caConfig := getClusterAutoscalerConfig()
 	applyFeatureGates(caConfig)
 

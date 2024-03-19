@@ -33,6 +33,7 @@ import (
 func main() {
 	rand.Seed(time.Now().UnixNano())
 
+	// 入口
 	command := app.NewSchedulerCommand()
 
 	// TODO: once we switch everything over to Cobra commands, we can go back to calling

@@ -117,6 +117,7 @@ for more information about scheduling and the kube-scheduler component.`,
 }
 
 // runCommand runs the scheduler.
+// kube-scheduler 和 kube-apiserver 类似，也是一个常驻进程
 func runCommand(cmd *cobra.Command, opts *options.Options, registryOptions ...Option) error {
 	verflag.PrintAndExitIfRequested()
 	cliflag.PrintFlags(cmd.Flags())
@@ -124,6 +125,8 @@ func runCommand(cmd *cobra.Command, opts *options.Options, registryOptions ...Op
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// 根据入参，返回配置 cc 和 调度器 sched
+	// 创建调度器
 	cc, sched, err := Setup(ctx, opts, registryOptions...)
 	if err != nil {
 		return err
@@ -137,6 +140,7 @@ func runCommand(cmd *cobra.Command, opts *options.Options, registryOptions ...Op
 		return nil
 	}
 
+	// 运行
 	return Run(ctx, cc, sched)
 }
 
@@ -153,9 +157,11 @@ func Run(ctx context.Context, cc *schedulerserverconfig.CompletedConfig, sched *
 	}
 
 	// Prepare the event broadcaster.
+	// 事件广播管理器，涉及到 K8s 里的一个核心资源  Event 事件
 	cc.EventBroadcaster.StartRecordingToSink(ctx.Done())
 
 	// Setup healthz checks.
+	// 健康监测的服务
 	var checks []healthz.HealthChecker
 	if cc.ComponentConfig.LeaderElection.LeaderElect {
 		checks = append(checks, cc.LeaderElection.WatchDog)
@@ -185,6 +191,7 @@ func Run(ctx context.Context, cc *schedulerserverconfig.CompletedConfig, sched *
 	}
 
 	// Start all informers.
+	// 异步各个 Informer
 	go cc.PodInformer.Informer().Run(ctx.Done())
 	cc.InformerFactory.Start(ctx.Done())
 
@@ -192,8 +199,12 @@ func Run(ctx context.Context, cc *schedulerserverconfig.CompletedConfig, sched *
 	cc.InformerFactory.WaitForCacheSync(ctx.Done())
 
 	// If leader election is enabled, runCommand via LeaderElector until done and exit.
+	// 选举 Leader 的工作，因为 Master 节点可以存在多个，选举一个作为 Leader
 	if cc.LeaderElection != nil {
 		cc.LeaderElection.Callbacks = leaderelection.LeaderCallbacks{
+			// 钩子函数
+			// 开启 Leading 时运行调度
+			// 结束时打印报错
 			OnStartedLeading: sched.Run,
 			OnStoppedLeading: func() {
 				klog.Fatalf("leaderelection lost")
@@ -204,12 +215,14 @@ func Run(ctx context.Context, cc *schedulerserverconfig.CompletedConfig, sched *
 			return fmt.Errorf("couldn't create leader elector: %v", err)
 		}
 
+		// 参与选举的会持续通信
 		leaderElector.Run(ctx)
 
 		return fmt.Errorf("lost lease")
 	}
 
 	// Leader election is disabled, so runCommand inline until done.
+	// 不参与选举的，也就是单节点，在这里运行
 	sched.Run(ctx)
 	return fmt.Errorf("finished without leader elect")
 }
