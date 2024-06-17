@@ -308,7 +308,8 @@ func (m *ManagerImpl) ValidatePlugin(pluginName string, endpoint string, version
 
 // RegisterPlugin starts the endpoint and registers it
 // TODO: Start the endpoint and wait for the First ListAndWatch call
-//       before registering the plugin
+//
+//	before registering the plugin
 func (m *ManagerImpl) RegisterPlugin(pluginName string, endpoint string, versions []string) error {
 	klog.V(2).Infof("Registering Plugin %s at endpoint %s", pluginName, endpoint)
 
@@ -642,17 +643,22 @@ func (m *ManagerImpl) devicesToAllocate(podUID, contName, resource string, requi
 	needed := required
 	// Gets list of devices that have already been allocated.
 	// This can happen if a container restarts for example.
+	// 获取这个 Pod 已经申请到的 Devices 列表
 	devices := m.podDevices.containerDevices(podUID, contName, resource)
 	if devices != nil {
+		// 当容器重启后，会走这里
 		klog.V(3).Infof("Found pre-allocated devices for resource %s container %q in Pod %q: %v", resource, contName, podUID, devices.List())
+		// 需要的数量 - 已经申请到的数量
 		needed = needed - devices.Len()
 		// A pod's resource is not expected to change once admitted by the API server,
 		// so just fail loudly here. We can revisit this part if this no longer holds.
 		if needed != 0 {
+			// 需要的数量 - 已经申请到的数量不等于 0，就会报错，重启后资源不应该发生变化
 			return nil, fmt.Errorf("pod %q container %q changed request for resource %q from %d to %d", podUID, contName, resource, devices.Len(), required)
 		}
 	}
 	if needed == 0 {
+		// 设备已经满足需求，不用再申请
 		// No change, no work.
 		return nil, nil
 	}
@@ -668,6 +674,8 @@ func (m *ManagerImpl) devicesToAllocate(podUID, contName, resource string, requi
 
 	// Create a closure to help with device allocation
 	// Returns 'true' once no more devices need to be allocated.
+	// 可以复用的资源是否可以满足 needed
+	// 比如之前申请了 5 张卡，现在需要 3 张
 	allocateRemainingFrom := func(devices sets.String) bool {
 		for device := range devices.Difference(allocated) {
 			m.allocatedDevices[resource].Insert(device)
@@ -686,10 +694,12 @@ func (m *ManagerImpl) devicesToAllocate(podUID, contName, resource string, requi
 	}
 
 	// Needs to allocate additional devices.
+	// 可复用的资源不能满足需求 needed
 	if m.allocatedDevices[resource] == nil {
 		m.allocatedDevices[resource] = sets.NewString()
 	}
 
+	// 申请资源
 	// Gets Devices in use.
 	devicesInUse := m.allocatedDevices[resource]
 	// Gets Available devices.
@@ -837,6 +847,7 @@ func (m *ManagerImpl) allocateContainerResources(pod *v1.Pod, container *v1.Cont
 	// Since device plugin advertises extended resources,
 	// therefore Requests must be equal to Limits and iterating
 	// over the Limits should be sufficient.
+	// 拓展资源不允许超过额度，所以 Request 和 Limit 必须相等，然后只需要遍历 Limit 即可
 	for k, v := range container.Resources.Limits {
 		resource := string(k)
 		needed := int(v.Value())
@@ -850,6 +861,8 @@ func (m *ManagerImpl) allocateContainerResources(pod *v1.Pod, container *v1.Cont
 			m.UpdateAllocatedDevices()
 			allocatedDevicesUpdated = true
 		}
+
+		// 获取需要申请的设备列表
 		allocDevices, err := m.devicesToAllocate(podUID, contName, resource, needed, devicesToReuse[resource])
 		if err != nil {
 			return err
@@ -885,6 +898,7 @@ func (m *ManagerImpl) allocateContainerResources(pod *v1.Pod, container *v1.Cont
 		// TODO: refactor this part of code to just append a ContainerAllocationRequest
 		// in a passed in AllocateRequest pointer, and issues a single Allocate call per pod.
 		klog.V(3).Infof("Making allocation request for devices %v for device plugin %s", devs, resource)
+		// 向 DevicePlugin 发送 Allocate 请求
 		resp, err := eI.e.allocate(devs)
 		metrics.DevicePluginAllocationDuration.WithLabelValues(resource).Observe(metrics.SinceInSeconds(startRPCTime))
 		if err != nil {
